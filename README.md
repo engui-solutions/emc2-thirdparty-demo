@@ -14,16 +14,8 @@ server.js файлд үндсэн backend үйлдлийг жишээ болго
 * Ажиллуулах `node server.js`
 * `server.js` файлд өөрийн байгууллын токеныг оруулж өгнө
 
-```
-git clone https://github.com/engui-solutions/emc2-thirdparty-demo.git
-```
-
-```
-npm install
-```
-
-```
-node server.js
+```js
+const token = 'Bearer <Your token>';
 ```
 
 ## Frontend
