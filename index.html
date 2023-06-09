@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Emc2 subscribed demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+      .container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin: 10px;
+        padding: 10px;
+        width: 300px;
+        background-color: aqua;
+      }
+      .devSelect {
+        display: none;
+      }
+      .pinInput {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      var employees = []
+      var selectedEmployee = undefined
+      var selectedLicense = undefined
+      var devices = []
+
+      const openFile = (bs64)=> {
+        var base64 = 'data:application/pdf;base64,' + bs64
+        var arr = base64.split(','),
+        mime = arr[0].match(/:(.*?);/)[1],
+        bstr = window.atob(arr[1]),
+        n = bstr.length,
+        u8arr = new Uint8Array(n)
+        while (n--) {
+          u8arr[n] = bstr.charCodeAt(n)
+        }
+        let blb = new Blob([u8arr], { type: 'application/pdf' })
+        var url = URL.createObjectURL(blb);
+        window.open(url, '_blank')?.focus()
+      }
+
+      const getDevices = async () => {
+        let socket = new WebSocket('ws://localhost:56825/ws')
+        socket.onopen = async (e) => {
+          socket.send(JSON.stringify({
+            app: 'THIRD_EMP',
+            token: selectedLicense,
+            type: 0x0121,
+            step: 0,
+          }))
+        }
+        socket.onerror = (e) => {
+          console.log('cannot connect ES application')
+        }
+        socket.onmessage = async (e) => {
+          let data = JSON.parse(e.data)
+          console.log(data)
+          devices = data.result
+          if (data.code == 200) {
+            var devSelect = document.getElementById('devSelect')
+            devSelect.innerHTML = ''
+            devSelect.style.display = 'block'
+            var pinInput = document.getElementById('pinInput')
+            pinInput.style.display = 'block'
+            var optionP = document.createElement('option')
+            optionP.value = ''
+            optionP.text = 'Төхөөрөмж сонгох'
+            devSelect.appendChild(optionP)
+            devices.forEach(element => {
+              var option = document.createElement('option')
+              option.value = element.name
+              option.text = element.name
+              devSelect.appendChild(option)
+            })
+
+          }
+
+        }
+      }
+
+      // ажилтнуудын жагсаалт авах, шаардлагатай талбар нэмэх функц
+      const getEmployeeList = async () => {
+        const res = await axios.post('http://localhost:3456/employee/list', {})
+        console.log(res)
+        if (res.data.code == 200) {
+          employees = res.data.result
+          var empSelect = document.getElementById('empSelect')
+          employees.forEach(element => {
+            var option = document.createElement('option')
+            option.value = element.id
+            option.text = `${element.lastname.substring(0, 1)}.${element.firstname}`
+            empSelect.appendChild(option)
+          })
+          empSelect.addEventListener('change', (event) => {
+            console.log(event.target.value)
+            if (event.target.value != 0) {
+              var licSelect = document.getElementById('licSelect')
+              licSelect.innerHTML = ''
+              const selectedEmp = employees.find((emp) => emp.id == event.target.value)
+              selectedEmployee = selectedEmp
+              selectedLicense = undefined
+              console.log(selectedEmp)
+              var optionP = document.createElement('option')
+              optionP.value = ''
+              optionP.text = 'Албан тушаал сонгох'
+              licSelect.appendChild(optionP)
+              selectedEmp.licenses.forEach(element => {
+                var option = document.createElement('option')
+                option.value = element.token
+                option.text = element.position
+                licSelect.appendChild(option)
+              })
+
+              licSelect.addEventListener('change', (event) => {
+                console.log(event.target.value)
+                if (event.target.value != '') {
+                  selectedLicense = event.target.value
+                } else {
+                  selectedLicense = undefined
+                }
+              })
+            } else {
+              selectedEmployee = undefined
+              selectedLicense = undefined
+            }
+          })
+
+          // токены талбарт эвент оруулах
+          var tokenSelect = document.getElementById('tokenSelect')
+          tokenSelect.addEventListener('change', async (event) => {
+            console.log(event.target.value)
+            if (event.target.value == 'online') {
+              
+            } else if (event.target.value == 'offline') {
+              await getDevices()
+            }
+          })
+
+
+        }
+      }
+
+      
+
+      // DOM элемент уншиж дууссаны дараа ажиллана
+      window.addEventListener('load', async function() {
+        await getEmployeeList()
+      })
+
+      const signDoc = async () => {
+        var tokenValue = document.getElementById('tokenSelect').value
+        if (tokenValue == 'online') {
+          await signMobileDoc()
+        } else if (tokenValue == 'offline') {
+          await signLocalDoc()
+        }
+      }
+
+      const signLocalDoc = async () => {
+        var fileSel = document.getElementById('fileInput')
+        var pinInput = document.getElementById('pinInput').value
+        var devValue = document.getElementById('devSelect').value
+        console.log(devValue)
+        if (fileSel.files.length > 0 && selectedEmployee != undefined && selectedLicense != undefined && pinInput.length > 0 && devValue != '') {
+          console.log('ok')
+          let formData = new FormData()
+          // Тоон гарын үсэг зурах файл
+          formData.append('documentToSign', fileSel.files[0])
+          // Gsign йпп дээр гарах мессеж
+          formData.append('message', 'Та гарын үсгээ зурна уу')
+          // хуудасны номер
+          formData.append('page', 1)
+          // хэвтээ тэнхлэгийн эхлэх цэг
+          formData.append('x', 50)
+          // босоо тэнхлэгийн эхлэх цэг
+          formData.append('y', 100)
+          // хэвтээ тэнхлэгийн урт
+          formData.append('width', 200)
+          // босоо тэнхлэгийн урт
+          formData.append('height', 80)
+
+          const res = await axios.post('http://localhost:3456/get/data/to/sign', formData, {
+            headers: {
+              "Employee-Token": selectedLicense,
+              'Content-Type': 'multipart/form-data',
+            }
+          })
+          console.log(res)
+          if (res.data.code == 200) {
+            let socket = new WebSocket('ws://localhost:56825/ws')
+            socket.onopen = async (e) => {
+              socket.send(JSON.stringify({
+                app: 'THIRD_EMP',
+                token: selectedLicense,
+                type: 0x0121,
+                pin: pinInput,
+                withCert: true,
+                data: res.data.result.dataToSign,
+                name: devValue,
+                step: 2,
+              }))
+            }
+            socket.onerror = (e) => {
+              console.log('cannot connect ES application')
+            }
+            socket.onmessage = async (e) => {
+              let data = JSON.parse(e.data)
+              console.log(data)
+              if (data.code == 200) {
+                formData.append('signingDate', res.data.result.signingDate)
+                formData.append('base64SignatureValue', data.result.signature)
+                formData.append('base64Certificate', data.result.cert)
+                const res2 = await axios.post('http://localhost:3456/local/sign', formData, {
+                  headers: {
+                    "Employee-Token": selectedLicense,
+                    'Content-Type': 'multipart/form-data',
+                  }
+                })
+                console.log(res2)
+                if (res2.data.code == 200) {
+                  openFile(res2.data.result.base64_file)
+                }
+              }
+
+            }
+          }
+          
+
+        } else {
+          console.log('Талбар дутуу')
+        }
+
+      }
+
+      const signMobileDoc = async () => {
+        var fileSel = document.getElementById('fileInput')
+        console.log(fileSel.files)
+        if (fileSel.files.length > 0 && selectedEmployee != undefined && selectedLicense != undefined) {
+          console.log(selectedEmployee, selectedLicense)
+          let formData = new FormData()
+          // Тоон гарын үсэг зурах файл
+          formData.append('documentToSign', fileSel.files[0])
+          // тоон гарын үсгийн утасны дугаар
+          formData.append('msisdn', selectedEmployee.phone_no)
+          // Gsign йпп дээр гарах мессеж
+          formData.append('message', 'Та гарын үсгээ зурна уу')
+          // хуудасны номер
+          formData.append('page', 1)
+          // хэвтээ тэнхлэгийн эхлэх цэг
+          formData.append('x', 50)
+          // босоо тэнхлэгийн эхлэх цэг
+          formData.append('y', 100)
+          // хэвтээ тэнхлэгийн урт
+          formData.append('width', 200)
+          // босоо тэнхлэгийн урт
+          formData.append('height', 80)
+
+          const res = await axios.post('http://localhost:3456/mobile/sign', formData, {
+            headers: {
+              "Employee-Token": selectedLicense,
+              'Content-Type': 'multipart/form-data',
+            }
+          })
+          console.log(res)
+          if (res.data.code == 200) {
+            openFile(res.data.result.base64_file)
+          }
+          
+        } else {
+          console.log('Талбар дутуу')
+        }
+      }
+    </script>
+    <div class="container">
+      <select name="empSelect" id="empSelect">
+        <option value="0">Ажилтан сонгох</option>
+      </select>
+      <select name="licSelect" id="licSelect"></select>
+      <input id="fileInput" type="file" accept="application/pdf">
+      <select name="tokenSelect" id="tokenSelect">
+        <option value="0">Токены төрөл сонгох</option>
+        <option value="online">Онлайн</option>
+        <option value="offline">Оффлайн</option>
+      </select>
+      <select name="devSelect" id="devSelect" class="devSelect"></select>
+      <input id="pinInput" class="pinInput" placeholder="пин код">
+      <button id="confirm" onclick="signDoc()">Батлах</button>
+    </div>
+  </body>
+</html>
