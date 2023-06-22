@@ -185,51 +185,72 @@
           // босоо тэнхлэгийн урт
           formData.append('height', 80)
 
-          const res = await axios.post('http://localhost:3456/get/data/to/sign', formData, {
-            headers: {
-              "Employee-Token": selectedLicense,
-              'Content-Type': 'multipart/form-data',
-            }
-          })
-          console.log(res)
-          if (res.data.code == 200) {
-            let socket = new WebSocket('ws://localhost:56825/ws')
-            socket.onopen = async (e) => {
-              socket.send(JSON.stringify({
-                app: 'THIRD_EMP',
-                token: selectedLicense,
-                type: 0x0121,
-                pin: pinInput,
-                withCert: true,
-                data: res.data.result.dataToSign,
-                name: devValue,
-                step: 2,
-              }))
-            }
-            socket.onerror = (e) => {
-              console.log('cannot connect ES application')
-            }
-            socket.onmessage = async (e) => {
-              let data = JSON.parse(e.data)
-              console.log(data)
-              if (data.code == 200) {
-                formData.append('signingDate', res.data.result.signingDate)
-                formData.append('base64SignatureValue', data.result.signature)
-                formData.append('base64Certificate', data.result.cert)
-                const res2 = await axios.post('http://localhost:3456/local/sign', formData, {
-                  headers: {
-                    "Employee-Token": selectedLicense,
-                    'Content-Type': 'multipart/form-data',
+          let socket1 = new WebSocket('ws://localhost:56825/ws')
+          socket1.onopen = async (e) => {
+            socket1.send(JSON.stringify({
+              app: 'THIRD_EMP',
+              token: selectedLicense,
+              type: 0x0121,
+              name: devValue,
+              step: 1,
+            }))
+          }
+          socket1.onerror = (e) => {
+            console.log('cannot connect ES application')
+          }
+          socket1.onmessage = async (e) => {
+            let data = JSON.parse(e.data)
+            console.log(data)
+            if (data.code == 200) {
+              formData.append('base64Certificate', data.result.cert)
+              const res = await axios.post('http://localhost:3456/get/data/to/sign', formData, {
+                headers: {
+                  "Employee-Token": selectedLicense,
+                  'Content-Type': 'multipart/form-data',
+                }
+              })
+              console.log(res)
+              if (res.data.code == 200) {
+                let socket2 = new WebSocket('ws://localhost:56825/ws')
+                socket2.onopen = async (e) => {
+                  socket2.send(JSON.stringify({
+                    app: 'THIRD_EMP',
+                    token: selectedLicense,
+                    type: 0x0121,
+                    pin: pinInput,
+                    withCert: true,
+                    data: res.data.result.dataToSign,
+                    name: devValue,
+                    step: 2,
+                  }))
+                }
+                socket2.onerror = (e) => {
+                  console.log('cannot connect ES application')
+                }
+                socket2.onmessage = async (e) => {
+                  let data = JSON.parse(e.data)
+                  console.log(data)
+                  if (data.code == 200) {
+                    formData.append('signingDate', res.data.result.signingDate)
+                    formData.append('base64SignatureValue', data.result.signature)
+                    const res2 = await axios.post('http://localhost:3456/local/sign', formData, {
+                      headers: {
+                        "Employee-Token": selectedLicense,
+                        'Content-Type': 'multipart/form-data',
+                      }
+                    })
+                    console.log(res2)
+                    if (res2.data.code == 200) {
+                      openFile(res2.data.result.base64_file)
+                    }
                   }
-                })
-                console.log(res2)
-                if (res2.data.code == 200) {
-                  openFile(res2.data.result.base64_file)
                 }
               }
+            } else {
 
             }
           }
+          
           
 
         } else {

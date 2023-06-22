@@ -15,7 +15,7 @@ const agent = new https.Agent({
   rejectUnauthorized: false,
 })
 
-const token = 'Bearer <Your token>';
+const token = 'Bearer <Байгууллагын токен>';
 
 app.use(cors());
 app.use(express.json());
